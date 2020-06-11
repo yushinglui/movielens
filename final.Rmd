@@ -1,0 +1,224 @@
+---
+title: "Capstone MovieLens Project"
+author: "Yu Shing Lui"
+date: "11 June 2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1.Introduction
+
+The MovieLens project is using the MovieLens 10M dataset to predict movie ratings in the validation set which containing part of MovieLens data. The main purpose of this project about the method to create and test the algorithm and predict movie ratings using the validation set by RMSE.
+
+The key steps performed as shown below:
+
+1.1 MovieLens 10M dataset.
+
+```{r warning=FALSE, message=FALSE}
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r.project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r.project.org") 
+if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r.project.org")
+```
+
+```{r}
+dl <- tempfile()
+ download.file("http://files.grouplens.org/datasets/movielens/ml-10m.zip", dl)
+
+ratings <- fread(text = gsub("::", "\t", readLines(unzip(dl, "ml-10M100K/ratings.dat"))), 
+                 col.names = c("userId", "movieId", "rating", "timestamp"))
+
+movies <- str_split_fixed(readLines(unzip(dl, "ml-10M100K/movies.dat")), "\\::", 3)
+ colnames(movies) <- c("movieId", "title", "genres")
+ movies <- as.data.frame(movies) %>% 
+    mutate(movieId = as.numeric(levels(movieId))[movieId], 
+           title = as.character(title), genres = as.character(genres))
+
+movielens <- left_join(ratings, movies, by = "movieId")
+```
+
+1.2 Validation set will be 10% of MovieLens data
+
+```{r warning=FALSE, message=FALSE}
+set.seed(1, sample.kind="Rounding")
+test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
+ edx <- movielens[-test_index,]
+ temp <- movielens[test_index,]
+```
+
+1.3 Make sure userId and movieId in validation set are also in edx set
+
+```{r}
+validation <- temp %>% semi_join(edx, by = "movieId") %>% semi_join(edx, by = "userId")
+```
+
+1.4 Add rows removed from validation set back into edx set
+
+```{r warning=FALSE, message=FALSE}
+removed <- anti_join(temp, validation)
+ edx <- rbind(edx, removed)
+ 
+rm(dl, ratings, movies, test_index, temp, movielens, removed)
+```
+
+## 2.Data exploration
+
+2.1 Find overall data in the dataset.
+
+```{r}
+head(edx)
+summary(edx)
+```
+
+2.2 In the edx set, there are 9000055 rows and 6 columns.
+
+```{r}
+dim(edx)
+```
+
+2.3 No movies have a rating of 0 and 2121240 movies have a rating of 3 can be found.
+
+```{r}
+edx %>% filter(rating == 0) %>% tally()
+edx %>% filter(rating == 3) %>% tally()
+```
+
+2.4 The edx dataset is including 10677 movies and 68978 users.
+
+```{r}
+data.frame(Movies= n_distinct(edx$movieId), Users=n_distinct(edx$userId))
+```
+
+2.5 The number of movie rating are in each of the following genres in the edx dataset.
+
+```{r warning=FALSE, message=FALSE}
+edx %>% separate_rows(genres, sep = "\\|") %>% 
+   group_by(genres) %>% summarize(count = n()) %>% arrange(desc(count))
+```
+
+2.6 It shows the top ten movies of rating and the movie "Pulp Fiction" has the greatest number of ratings.
+
+```{r warning=FALSE, message=FALSE}
+edx %>% group_by(movieId, title) %>% summarize(count = n()) %>% arrange(desc(count))
+```
+
+2.7 The top five ratings are shown as below, which rating of 4 is the most and 2 is the least given ratings.
+
+```{r warning=FALSE, message=FALSE}
+edx %>% group_by(rating) %>% summarize(count = n()) %>% top_n(5) %>% arrange(desc(count))
+```
+
+2.8 The following code is shown that half star ratings are less common than whole star ratings.
+
+```{r warning=FALSE, message=FALSE}
+edx %>% group_by(rating) %>% summarize(count = n())
+```
+
+The basic infomation is shown above and we start to analysis the information in the following section.
+
+## 3.Analysis and Result
+
+3.1 The general properties of the Movie and User data.
+
+```{r}
+edx %>% count(movieId) %>% 
+  ggplot(aes(n)) + geom_histogram(fill = "grey", color = "black", bins = 30) +
+  scale_x_log10() + xlab("n") + ylab("count") + 
+  ggtitle("Movies")
+```
+
+```{r}
+edx %>% count(userId) %>% 
+  ggplot(aes(n)) + geom_histogram(fill = "grey", color = "black", bins = 30) +
+  scale_x_log10() + xlab("n") + ylab("count") + 
+  ggtitle("Users")
+```
+
+3.2 Computing the RMSE for vectors of ratings and their corresponding predictors.
+
+```{r}
+RMSE <- function(predicted_ratings, true_ratings){
+  sqrt(mean((predicted_ratings - true_ratings)^2))
+}
+```
+
+3.3 Creating the average of all ratings model.
+
+```{r}
+mu_hat <- mean(edx$rating)
+mu_hat
+```
+
+3.4 Predicting all unknown ratings with mu we obtain the following RMSE
+
+```{r}
+naive_rmse <- RMSE(validation$rating, mu_hat)
+naive_rmse
+```
+
+3.5 Creating a results table with this naive approach
+
+```{r}
+rmse_results <- tibble(method = "Just the average", RMSE = naive_rmse)
+rmse_results
+```
+
+The result of this model of the average rating is 3.51, and RMSE is 1.06. So we can definitely do better!
+
+3.6 Now we create movie effects model.
+
+```{r warning=FALSE, message=FALSE}
+movie_avgs <- edx %>%
+  group_by(movieId) %>%
+  summarize(b_i = mean(rating - mu_hat))
+
+movie_avgs %>% qplot(b_i, geom ="histogram", bins = 10, data = ., color = I("grey"),
+                     ylab = "counts", main = "Number of movies")
+```
+
+3.7 The predict result of movie effects model.
+
+```{r}
+predicted_ratings <- mu_hat + validation %>% 
+   left_join(movie_avgs, by='movieId') %>% pull(b_i)
+
+RMSE(predicted_ratings, validation$rating)
+```
+
+The predict result is 0.94 and we believe that we can do much metter.
+
+3.8 Creating user effect model and computing the average rating for user.
+
+```{r warning=FALSE, message=FALSE}
+edx %>% group_by(userId) %>% 
+   summarize(b_u = mean(rating)) %>% 
+   filter(n()>=100) %>% ggplot(aes(b_u)) + 
+   geom_histogram(bins = 30, color = "grey")
+```
+
+3.9 Computing an approximation by computing mu and bi and estimating bu as the average of yu,i - mu - bi:
+
+```{r}
+user_avgs <- edx %>% 
+  left_join(movie_avgs, by='movieId') %>%
+  group_by(userId) %>%
+  summarize(b_u = mean(rating - mu_hat - b_i))
+```
+
+3.10 Constructing predictors and see how much the RMSE improves.
+
+```{r}
+predicted_ratings <- validation %>% left_join(movie_avgs, by='movieId') %>% 
+   left_join(user_avgs, by='userId') %>% 
+   mutate(pred = mu_hat + b_i + b_u) %>% pull(pred)
+
+RMSE(predicted_ratings, validation$rating)
+```
+
+The result of RMSE is 0.865.
+
+## Conclusion
+
+As the result, the algorithm achieved a final RMSE value, which is fulfilled the requirement. It is a challenging project and learn a lot about the machine learning and build up the model to analysis the result.
