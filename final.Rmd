@@ -42,7 +42,7 @@ movielens <- left_join(ratings, movies, by = "movieId")
 1.2 Validation set will be 10% of MovieLens data
 
 ```{r warning=FALSE, message=FALSE}
-set.seed(1, sample.kind="Rounding")
+set.seed(1)
 test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
  edx <- movielens[-test_index,]
  temp <- movielens[test_index,]
@@ -72,13 +72,13 @@ head(edx)
 summary(edx)
 ```
 
-2.2 In the edx set, there are 9000055 rows and 6 columns.
+2.2 In the edx set, there are 9000061 rows and 6 columns.
 
 ```{r}
 dim(edx)
 ```
 
-2.3 No movies have a rating of 0 and 2121240 movies have a rating of 3 can be found.
+2.3 No movies have a rating of 0 and 2121638 movies have a rating of 3 can be found.
 
 ```{r}
 edx %>% filter(rating == 0) %>% tally()
@@ -200,7 +200,7 @@ edx %>% group_by(userId) %>%
 
 3.9 Computing an approximation by computing mu and bi and estimating bu as the average of yu,i - mu - bi:
 
-```{r}
+```{r warning=FALSE, message=FALSE}
 user_avgs <- edx %>% 
   left_join(movie_avgs, by='movieId') %>%
   group_by(userId) %>%
