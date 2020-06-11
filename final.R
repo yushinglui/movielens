@@ -27,7 +27,7 @@ movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(levels(movieId))
 movielens <- left_join(ratings, movies, by = "movieId")
 
 # Validation set will be 10% of MovieLens data
-set.seed(1, sample.kind="Rounding")
+set.seed(1)
 test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
 edx <- movielens[-test_index,]
 temp <- movielens[test_index,]
